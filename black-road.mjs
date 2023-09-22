@@ -289,6 +289,8 @@ const plan = async () => {
   info('Vault was gracefully shut down');
 };
 
+const vault = async () => {}
+
 switch (argv._[1]) {
   case 'init':
     await init();
