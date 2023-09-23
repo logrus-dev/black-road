@@ -46,6 +46,7 @@ Black Road itself needs a storage for own config file. It supports only local fi
 ## Deployment flow
 
 1. `zx https://s.logrus.dev/black-road.mjs init` - an interactive shell will ask a series of questions for creating config file. All questions are optional (press Enter) but all parameters are mandatory - must be specified manually in the created file if skipped initially. This command does not call `terraform init`. The command is re-enterable - running it multiple times will update fields which are not skipped.
+1. `zx https://s.logrus.dev/black-road.mjs vault` - starts local Vault server and prints URL to the Vault UI. URL includes 10-living auth token, so authentication is happening automatically when following the link, bypassing UI login screen.
 1. `zx https://s.logrus.dev/black-road.mjs plan` - bypass to `terraform plan`. State file is loaded in advance and Vault server is started.
 1. `zx https://s.logrus.dev/black-road.mjs apply` - bypass to `terraform apply`. State file is loaded in advance and Vault server is started. State file is sent back to the S3 and Vault is gracefully shut down right after Terraform is done work.
 

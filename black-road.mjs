@@ -2,8 +2,6 @@
 
 $.verbose = false
 
-import 'zx/globals'
-
 const sysDir = './.black-road';
 const configPath = './black-road.json';
 const vaultConfigPath = `${sysDir}/vault.hcl`;
@@ -47,7 +45,7 @@ const preconditions = async () => {
 };
 
 const encrypt = async (gpgKeyName, str) => {
-  const gpg = $`gpg --always-trust --yes --encrypt -r "${gpgKeyName}"`;
+  const gpg = $`gpg --always-trust --yes --encrypt -r ${gpgKeyName}`;
   const base64 = gpg.pipe($`base64`);
   gpg.stdin.write(str);
   gpg.stdin.end();
@@ -62,7 +60,7 @@ const decrypt = async (gpgKeyName, str) => {
     base64.stdin.end();
     await base64;
 
-    return (await $`gpg --decrypt -r "${gpgKeyName}" /tmp/black_road_stdin`).stdout;
+    return (await $`gpg --decrypt -r ${gpgKeyName} /tmp/black_road_stdin`).stdout;
   } finally {
     await $`rm -f /tmp/black_road_stdin`;
   }
@@ -119,15 +117,15 @@ const startVault = async (config) => spinner('Starting Vault...', async () => {
 
   // vault status returns error code alongside with success message
   await retry(5, '3s', async () => {
-    const status = await $`vault status -address="${vaultUrl}" | tr -s ' ' | grep 'Initialized true'`.nothrow();
+    const status = await $`vault status -address=${vaultUrl} | tr -s ' ' | grep 'Initialized true'`.nothrow();
 
     if (!status || status.toString().trim() !== 'Initialized true') {
       throw new Error('Vault is not started or not initialized');
     }
   });
 
-  await $`vault operator unseal -address="${vaultUrl}" ${config.vault.unsealKey}`;
-  await $`vault login -address="${vaultUrl}" ${config.vault.accessToken}`;
+  await $`vault operator unseal -address=${vaultUrl} ${config.vault.unsealKey}`;
+  await $`vault login -address=${vaultUrl} ${config.vault.accessToken}`;
 
   info('Vault is up, unsealed and logged in');
 
@@ -137,7 +135,7 @@ const startVault = async (config) => spinner('Starting Vault...', async () => {
 const init = async () => {
   if (!await preconditions()) return;
 
-  const gpgKeyName = await question('Name of GPG key to use when working with the root secrets: ');
+  const gpgKeyName = await question('Name of GPG key to use when working with the core secrets: ');
   if (await $`gpg --list-secret-keys | grep -w ${gpgKeyName}`.exitCode !== 0) {
     error('gpg key does not exist in the local keychain');
     return;
@@ -210,12 +208,12 @@ const loadRemoteTerraformState = async (config) => {
     if (exitCode == 0) {
       info('Found remote Terraform state. Downloading...');
       await $`rm -f ${encryptedStatePath}`;
-      await $`aws s3 cp "${remoteStateS3Url}" "${sysDir}" --endpoint-url "${config.terraform.s3.endpoint}"`;
+      await $`aws s3 cp ${remoteStateS3Url} ${sysDir} --endpoint-url ${config.terraform.s3.endpoint}`;
       info('Downloaded remote Terraform state');
 
       info('Decrypting remote Terraform state');
       await $`rm -f ./terraform.tfstate`;
-      await $`gpg --decrypt -o "./terraform.tfstate" -r "${config.gpg.key}" "${encryptedStatePath}"`;
+      await $`gpg --decrypt -o "./terraform.tfstate" -r ${config.gpg.key} ${encryptedStatePath}`;
       info('Decrypted remote Terraform state');
     } else {
       info('Remote Terraform state not found');
@@ -236,9 +234,9 @@ const saveRemoteTerraformState = async (config) => {
     };
     info('Encrypting remote Terraform state');
     await $`rm -f ${encryptedStatePath}`;
-    await $`gpg --always-trust --yes --encrypt -o "${encryptedStatePath}" -r "${config.gpg.key}" ./terraform.tfstate`;
+    await $`gpg --always-trust --yes --encrypt -o ${encryptedStatePath} -r ${config.gpg.key} ./terraform.tfstate`;
     info('Saving remote Terraform state');
-    await $`aws s3 cp "${encryptedStatePath}" "${remoteStateS3Url}" --endpoint-url "${config.terraform.s3.endpoint}"`;
+    await $`aws s3 cp ${encryptedStatePath} ${remoteStateS3Url} --endpoint-url ${config.terraform.s3.endpoint}`;
     info('Saved remote Terraform state');
   });
 };
@@ -289,9 +287,22 @@ const plan = async () => {
   info('Vault was gracefully shut down');
 };
 
-const vault = async () => {}
+const vault = async () => {
+  if (!await preconditions()) return;
 
-switch (argv._[1]) {
+  await $`gpgconf --kill gpg-agent`;
+  const config = await loadConfig();
+
+  const [vaultProcess] = await startVault(config);
+  const { stdout: token } = await $`vault token create -period=10m -wrap-ttl=10m -field=wrapping_token -address=${vaultUrl}`;
+  info(`Vault UI: http://localhost:8200/ui/vault/secrets?wrapped_token=${token}`);
+  await question('Enter to gracefully shut down');
+  await $`vault operator seal -address=${vaultUrl}`;
+  await vaultProcess.kill();
+  info('Vault was gracefully shut down');
+};
+
+switch (argv._[0]) {
   case 'init':
     await init();
     break;
@@ -300,6 +311,9 @@ switch (argv._[1]) {
     break;
   case 'plan':
       await plan();
+      break;
+  case 'vault':
+      await vault();
       break;
   default:
     error('Welcome to Black Road deploy utility');
