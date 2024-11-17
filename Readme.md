@@ -1,3 +1,7 @@
+⚠️[OpenTofu](https://opentofu.org/blog/opentofu-1-7-0/) provides state encryption out of the box since April 2024. That update adressed a major part of the problems Black Road attempted to solve.
+
+---
+ 
 Black Road is a deployment tool. It is an automation script on the top of HashiCorp's [Terraform](https://www.terraform.io) and [Vault](https://www.vaultproject.io/) projects, written using [zx](https://google.github.io/zx) NodeJS package. It implements a very custom deployment pattern which solves very specific issues which occur when using Terraform or Vault directly. In particular:
 
 1. Black Road is a tool for **manual** deployment running from local machine.
